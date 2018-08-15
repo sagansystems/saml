@@ -31,14 +31,26 @@ type Options struct {
 	CookieMaxAge      time.Duration
 	CookieSecure      bool
 	ForceAuthn        bool
+	MetadataPath      string
+	ACSPath           string
 }
 
 // New creates a new Middleware
 func New(opts Options) (*Middleware, error) {
 	metadataURL := opts.URL
-	metadataURL.Path = metadataURL.Path + "/saml/metadata"
+	if opts.MetadataPath == "" {
+		metadataURL.Path = metadataURL.Path + "/saml/metadata"
+	} else {
+		metadataURL.Path = metadataURL.Path + opts.MetadataPath
+	}
+
 	acsURL := opts.URL
-	acsURL.Path = acsURL.Path + "/saml/acs"
+	if opts.ACSPath == "" {
+		acsURL.Path = acsURL.Path + "/saml/acs"
+	} else {
+		acsURL.Path = acsURL.Path + opts.ACSPath
+	}
+
 	logr := opts.Logger
 	if logr == nil {
 		logr = logger.DefaultLogger
