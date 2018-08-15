@@ -71,8 +71,9 @@ func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.Path == m.ServiceProvider.AcsURL.Path {
-		assertion, err := m.GetAssertion(w, r)
+		assertion, err := m.GetAssertion(r)
 		if err != nil {
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
 
@@ -89,7 +90,7 @@ func (m *Middleware) ServeMetadata(w http.ResponseWriter, r *http.Request) {
 	w.Write(buf)
 }
 
-func (m *Middleware) GetAssertion(w http.ResponseWriter, r *http.Request) (*saml.Assertion, error) {
+func (m *Middleware) GetAssertion(r *http.Request) (*saml.Assertion, error) {
 	r.ParseForm()
 	assertion, err := m.ServiceProvider.ParseResponse(r, m.getPossibleRequestIDs(r))
 	if err != nil {
@@ -97,7 +98,6 @@ func (m *Middleware) GetAssertion(w http.ResponseWriter, r *http.Request) (*saml
 			m.ServiceProvider.Logger.Printf("RESPONSE: ===\n%s\n===\nNOW: %s\nERROR: %s",
 				parseErr.Response, parseErr.Now, parseErr.PrivateErr)
 		}
-		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return nil, err
 	}
 
@@ -117,13 +117,13 @@ func (m *Middleware) RequireAccount(handler http.Handler) http.Handler {
 			return
 		}
 
-		initiator := m.GetSAMLInitiator(r.URL.String())
+		initiator := m.CreateGetSAMLInitiatorHandlerFunc(r.URL.String())
 		initiator(w, r)
 	}
 	return http.HandlerFunc(fn)
 }
 
-func (m *Middleware) GetSAMLInitiator(relayStateURI string) func(w http.ResponseWriter, r *http.Request) {
+func (m *Middleware) CreateGetSAMLInitiatorHandlerFunc(relayStateURI string) func(w http.ResponseWriter, r *http.Request) {
 	initiator := func(w http.ResponseWriter, r *http.Request) {
 		// If we try to redirect when the original request is the ACS URL we'll
 		// end up in a loop. This is a programming error, so we panic here. In
@@ -215,10 +215,13 @@ func (m *Middleware) getPossibleRequestIDs(r *http.Request) []string {
 // It sets a cookie that contains a signed JWT containing the assertion attributes.
 // It then redirects the user's browser to the original URL contained in RelayState.
 func (m *Middleware) Authorize(w http.ResponseWriter, r *http.Request, assertion *saml.Assertion) {
-	redirectURI, err := m.GetRedirectURI(w, r, assertion)
+	redirectURI, err := m.GetRedirectURI(r, assertion)
 	if err != nil {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
+
+	m.DeleteRelayStateCookie(w, r)
 
 	now := saml.TimeNow()
 	claims := AuthorizationToken{}
@@ -254,7 +257,7 @@ func (m *Middleware) Authorize(w http.ResponseWriter, r *http.Request, assertion
 	http.Redirect(w, r, redirectURI, http.StatusFound)
 }
 
-func (m *Middleware) GetRedirectURI(w http.ResponseWriter, r *http.Request, assertion *saml.Assertion) (string, error) {
+func (m *Middleware) GetRedirectURI(r *http.Request, assertion *saml.Assertion) (string, error) {
 	secretBlock := x509.MarshalPKCS1PrivateKey(m.ServiceProvider.Key)
 
 	redirectURI := "/"
@@ -262,7 +265,6 @@ func (m *Middleware) GetRedirectURI(w http.ResponseWriter, r *http.Request, asse
 		stateValue := m.ClientState.GetState(r, relayState)
 		if stateValue == "" {
 			m.ServiceProvider.Logger.Printf("cannot find corresponding state: %s", relayState)
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return "", errors.New("Error retrieving Relay State")
 		}
 
@@ -274,16 +276,19 @@ func (m *Middleware) GetRedirectURI(w http.ResponseWriter, r *http.Request, asse
 		})
 		if err != nil || !state.Valid {
 			m.ServiceProvider.Logger.Printf("Cannot decode state JWT: %s (%s)", err, stateValue)
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return "", errors.New("Error retrieving Relay State")
 		}
 		claims := state.Claims.(jwt.MapClaims)
 		redirectURI = claims["uri"].(string)
+	}
+	return redirectURI, nil
+}
 
+func (m *Middleware) DeleteRelayStateCookie(w http.ResponseWriter, r *http.Request) {
+	if relayState := r.Form.Get("RelayState"); relayState != "" {
 		// delete the cookie
 		m.ClientState.DeleteState(w, r, relayState)
 	}
-	return redirectURI, nil
 }
 
 // IsAuthorized returns true if the request has already been authorized.
