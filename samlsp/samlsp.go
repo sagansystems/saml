@@ -41,16 +41,16 @@ type Options struct {
 func New(opts Options) (*Middleware, error) {
 	metadataURL := opts.URL
 	if opts.MetadataPath == "" {
-		metadataURL.Path = metadataURL.Path + "/saml/metadata"
+		metadataURL.Path += "/saml/metadata"
 	} else {
-		metadataURL.Path = metadataURL.Path + opts.MetadataPath
+		metadataURL.Path += opts.MetadataPath
 	}
 
 	acsURL := opts.URL
 	if opts.ACSPath == "" {
-		acsURL.Path = acsURL.Path + "/saml/acs"
+		acsURL.Path += "/saml/acs"
 	} else {
-		acsURL.Path = acsURL.Path + opts.ACSPath
+		acsURL.Path += opts.ACSPath
 	}
 
 	logr := opts.Logger
