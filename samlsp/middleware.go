@@ -258,6 +258,8 @@ func (m *Middleware) Authorize(w http.ResponseWriter, r *http.Request, assertion
 }
 
 func (m *Middleware) GetRedirectURI(r *http.Request, assertion *saml.Assertion) (string, error) {
+	r.ParseForm()
+
 	secretBlock := x509.MarshalPKCS1PrivateKey(m.ServiceProvider.Key)
 
 	redirectURI := "/"
