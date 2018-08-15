@@ -68,3 +68,8 @@
   solver-name = "gps-cdcl"
   solver-version = 1
 
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/crewjam/saml"
+  source = "github.com/sagansystems/saml"
