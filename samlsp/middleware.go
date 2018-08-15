@@ -118,8 +118,8 @@ func (m *Middleware) RequireAccount(handler http.Handler) http.Handler {
 			return
 		}
 
-		initiator := m.CreateGetSAMLInitiatorHandlerFunc(r.URL.String())
-		initiator(w, r)
+		handleGetSAMLInitiator := m.CreateGetSAMLInitiatorHandlerFunc(r.URL.String())
+		handleGetSAMLInitiator(w, r)
 	}
 	return http.HandlerFunc(fn)
 }
