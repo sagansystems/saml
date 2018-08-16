@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/xml"
+	"errors"
 	"net/http"
 	"time"
 
@@ -65,20 +66,13 @@ func randomBytes(n int) []byte {
 // m.ServiceProvider.AcsURL.
 func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == m.ServiceProvider.MetadataURL.Path {
-		buf, _ := xml.MarshalIndent(m.ServiceProvider.Metadata(), "", "  ")
-		w.Header().Set("Content-Type", "application/samlmetadata+xml")
-		w.Write(buf)
+		m.ServeMetadata(w, r)
 		return
 	}
 
 	if r.URL.Path == m.ServiceProvider.AcsURL.Path {
-		r.ParseForm()
-		assertion, err := m.ServiceProvider.ParseResponse(r, m.getPossibleRequestIDs(r))
+		assertion, err := m.GetAssertion(r)
 		if err != nil {
-			if parseErr, ok := err.(*saml.InvalidResponseError); ok {
-				m.ServiceProvider.Logger.Printf("RESPONSE: ===\n%s\n===\nNOW: %s\nERROR: %s",
-					parseErr.Response, parseErr.Now, parseErr.PrivateErr)
-			}
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
@@ -90,9 +84,30 @@ func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.NotFoundHandler().ServeHTTP(w, r)
 }
 
+func (m *Middleware) ServeMetadata(w http.ResponseWriter, r *http.Request) {
+	buf, _ := xml.MarshalIndent(m.ServiceProvider.Metadata(), "", "  ")
+	w.Header().Set("Content-Type", "application/samlmetadata+xml")
+	w.Write(buf)
+}
+
+func (m *Middleware) GetAssertion(r *http.Request) (*saml.Assertion, error) {
+	r.ParseForm()
+	assertion, err := m.ServiceProvider.ParseResponse(r, m.getPossibleRequestIDs(r))
+	if err != nil {
+		if parseErr, ok := err.(*saml.InvalidResponseError); ok {
+			m.ServiceProvider.Logger.Printf("RESPONSE: ===\n%s\n===\nNOW: %s\nERROR: %s",
+				parseErr.Response, parseErr.Now, parseErr.PrivateErr)
+		}
+		return nil, err
+	}
+
+	return assertion, nil
+}
+
+
 // RequireAccount is HTTP middleware that requires that each request be
 // associated with a valid session. If the request is not associated with a valid
-// session, then rather than serve the request, the middlware redirects the user
+// session, then rather than serve the request, the middleware redirects the user
 // to start the SAML auth flow.
 func (m *Middleware) RequireAccount(handler http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
@@ -102,6 +117,14 @@ func (m *Middleware) RequireAccount(handler http.Handler) http.Handler {
 			return
 		}
 
+		handleGetSAMLInitiator := m.CreateGetSAMLInitiatorHandlerFunc(r.URL.String())
+		handleGetSAMLInitiator(w, r)
+	}
+	return http.HandlerFunc(fn)
+}
+
+func (m *Middleware) CreateGetSAMLInitiatorHandlerFunc(relayStateURI string) func(w http.ResponseWriter, r *http.Request) {
+	initiator := func(w http.ResponseWriter, r *http.Request) {
 		// If we try to redirect when the original request is the ACS URL we'll
 		// end up in a loop. This is a programming error, so we panic here. In
 		// general this means a 500 to the user, which is preferable to a
@@ -123,7 +146,7 @@ func (m *Middleware) RequireAccount(handler http.Handler) http.Handler {
 			return
 		}
 
-		// relayState is limited to 80 bytes but also must be integrety protected.
+		// relayState is limited to 80 bytes but also must be integrity protected.
 		// this means that we cannot use a JWT because it is way to long. Instead
 		// we set a cookie that corresponds to the state
 		relayState := base64.URLEncoding.EncodeToString(randomBytes(42))
@@ -132,7 +155,7 @@ func (m *Middleware) RequireAccount(handler http.Handler) http.Handler {
 		state := jwt.New(jwtSigningMethod)
 		claims := state.Claims.(jwt.MapClaims)
 		claims["id"] = req.ID
-		claims["uri"] = r.URL.String()
+		claims["uri"] = relayStateURI
 		signedState, err := state.SignedString(secretBlock)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -159,7 +182,7 @@ func (m *Middleware) RequireAccount(handler http.Handler) http.Handler {
 		}
 		panic("not reached")
 	}
-	return http.HandlerFunc(fn)
+	return initiator
 }
 
 func (m *Middleware) getPossibleRequestIDs(r *http.Request) []string {
@@ -192,34 +215,13 @@ func (m *Middleware) getPossibleRequestIDs(r *http.Request) []string {
 // It sets a cookie that contains a signed JWT containing the assertion attributes.
 // It then redirects the user's browser to the original URL contained in RelayState.
 func (m *Middleware) Authorize(w http.ResponseWriter, r *http.Request, assertion *saml.Assertion) {
-	secretBlock := x509.MarshalPKCS1PrivateKey(m.ServiceProvider.Key)
-
-	redirectURI := "/"
-	if relayState := r.Form.Get("RelayState"); relayState != "" {
-		stateValue := m.ClientState.GetState(r, relayState)
-		if stateValue == "" {
-			m.ServiceProvider.Logger.Printf("cannot find corresponding state: %s", relayState)
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-			return
-		}
-
-		jwtParser := jwt.Parser{
-			ValidMethods: []string{jwtSigningMethod.Name},
-		}
-		state, err := jwtParser.Parse(stateValue, func(t *jwt.Token) (interface{}, error) {
-			return secretBlock, nil
-		})
-		if err != nil || !state.Valid {
-			m.ServiceProvider.Logger.Printf("Cannot decode state JWT: %s (%s)", err, stateValue)
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-			return
-		}
-		claims := state.Claims.(jwt.MapClaims)
-		redirectURI = claims["uri"].(string)
-
-		// delete the cookie
-		m.ClientState.DeleteState(w, r, relayState)
+	redirectURI, err := m.GetRedirectURI(r, assertion)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
 	}
+
+	m.DeleteRelayStateCookie(w, r)
 
 	now := saml.TimeNow()
 	claims := AuthorizationToken{}
@@ -244,6 +246,7 @@ func (m *Middleware) Authorize(w http.ResponseWriter, r *http.Request, assertion
 			}
 		}
 	}
+	secretBlock := x509.MarshalPKCS1PrivateKey(m.ServiceProvider.Key)
 	signedToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256,
 		claims).SignedString(secretBlock)
 	if err != nil {
@@ -252,6 +255,42 @@ func (m *Middleware) Authorize(w http.ResponseWriter, r *http.Request, assertion
 
 	m.ClientToken.SetToken(w, r, signedToken, m.TokenMaxAge)
 	http.Redirect(w, r, redirectURI, http.StatusFound)
+}
+
+func (m *Middleware) GetRedirectURI(r *http.Request, assertion *saml.Assertion) (string, error) {
+	r.ParseForm()
+
+	secretBlock := x509.MarshalPKCS1PrivateKey(m.ServiceProvider.Key)
+
+	redirectURI := "/"
+	if relayState := r.Form.Get("RelayState"); relayState != "" {
+		stateValue := m.ClientState.GetState(r, relayState)
+		if stateValue == "" {
+			m.ServiceProvider.Logger.Printf("cannot find corresponding state: %s", relayState)
+			return "", errors.New("Error retrieving Relay State")
+		}
+
+		jwtParser := jwt.Parser{
+			ValidMethods: []string{jwtSigningMethod.Name},
+		}
+		state, err := jwtParser.Parse(stateValue, func(t *jwt.Token) (interface{}, error) {
+			return secretBlock, nil
+		})
+		if err != nil || !state.Valid {
+			m.ServiceProvider.Logger.Printf("Cannot decode state JWT: %s (%s)", err, stateValue)
+			return "", errors.New("Error retrieving Relay State")
+		}
+		claims := state.Claims.(jwt.MapClaims)
+		redirectURI = claims["uri"].(string)
+	}
+	return redirectURI, nil
+}
+
+func (m *Middleware) DeleteRelayStateCookie(w http.ResponseWriter, r *http.Request) {
+	if relayState := r.Form.Get("RelayState"); relayState != "" {
+		// delete the cookie
+		m.ClientState.DeleteState(w, r, relayState)
+	}
 }
 
 // IsAuthorized returns true if the request has already been authorized.
