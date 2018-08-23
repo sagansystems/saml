@@ -95,8 +95,8 @@ func (m *Middleware) GetAssertion(r *http.Request) (*saml.Assertion, error) {
 	assertion, err := m.ServiceProvider.ParseResponse(r, m.getPossibleRequestIDs(r))
 	if err != nil {
 		if parseErr, ok := err.(*saml.InvalidResponseError); ok {
-			m.ServiceProvider.Logger.Printf("Error parsing saml assertion: %s with error: %s",
-				parseErr.Response, parseErr.PrivateErr)
+			m.ServiceProvider.Logger.Printf("Error parsing saml assertion: %s with error: %s at: %s",
+				parseErr.Response, parseErr.PrivateErr, parseErr.Now)
 		}
 		return nil, err
 	}
