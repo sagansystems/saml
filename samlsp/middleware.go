@@ -95,8 +95,8 @@ func (m *Middleware) GetAssertion(r *http.Request) (*saml.Assertion, error) {
 	assertion, err := m.ServiceProvider.ParseResponse(r, m.getPossibleRequestIDs(r))
 	if err != nil {
 		if parseErr, ok := err.(*saml.InvalidResponseError); ok {
-			m.ServiceProvider.Logger.Printf("RESPONSE: ===\n%s\n===\nNOW: %s\nERROR: %s",
-				parseErr.Response, parseErr.Now, parseErr.PrivateErr)
+			m.ServiceProvider.Logger.Printf("Error parsing saml assertion: %s with error: %s",
+				parseErr.Response, parseErr.PrivateErr)
 		}
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (m *Middleware) getPossibleRequestIDs(r *http.Request) []string {
 			return secretBlock, nil
 		})
 		if err != nil || !token.Valid {
-			m.ServiceProvider.Logger.Printf("... invalid token %s", err)
+			m.ServiceProvider.Logger.Printf("Error creating service provider JWT %s", err)
 			continue
 		}
 		claims := token.Claims.(jwt.MapClaims)
@@ -266,7 +266,7 @@ func (m *Middleware) GetRedirectURI(r *http.Request, assertion *saml.Assertion) 
 	if relayState := r.Form.Get("RelayState"); relayState != "" {
 		stateValue := m.ClientState.GetState(r, relayState)
 		if stateValue == "" {
-			m.ServiceProvider.Logger.Printf("cannot find corresponding state: %s", relayState)
+			m.ServiceProvider.Logger.Printf("Cannot find corresponding state: %s", relayState)
 			return "", errors.New("Error retrieving Relay State")
 		}
 
@@ -277,7 +277,7 @@ func (m *Middleware) GetRedirectURI(r *http.Request, assertion *saml.Assertion) 
 			return secretBlock, nil
 		})
 		if err != nil || !state.Valid {
-			m.ServiceProvider.Logger.Printf("Cannot decode state JWT: %s (%s)", err, stateValue)
+			m.ServiceProvider.Logger.Printf("Cannot decode state %s in JWT: %s", stateValue, err)
 			return "", errors.New("Error retrieving Relay State")
 		}
 		claims := state.Claims.(jwt.MapClaims)
@@ -317,15 +317,15 @@ func (m *Middleware) GetAuthorizationToken(r *http.Request) *AuthorizationToken 
 		return secretBlock, nil
 	})
 	if err != nil || !token.Valid {
-		m.ServiceProvider.Logger.Printf("ERROR: invalid token: %s", err)
+		m.ServiceProvider.Logger.Printf("Invalid saml token: %s", err)
 		return nil
 	}
 	if err := tokenClaims.StandardClaims.Valid(); err != nil {
-		m.ServiceProvider.Logger.Printf("ERROR: invalid token claims: %s", err)
+		m.ServiceProvider.Logger.Printf("Invalid saml token claims: %s", err)
 		return nil
 	}
 	if tokenClaims.Audience != m.ServiceProvider.Metadata().EntityID {
-		m.ServiceProvider.Logger.Printf("ERROR: invalid audience: %s", err)
+		m.ServiceProvider.Logger.Printf("Audience mismatch in token %s and service provider %s", tokenClaims.Audience, m.ServiceProvider.Metadata().EntityID)
 		return nil
 	}
 

@@ -115,7 +115,7 @@ func New(opts Options) (*Middleware, error) {
 			if i > 10 {
 				return nil, err
 			}
-			logr.Printf("ERROR: %s: %s (will retry)", opts.IDPMetadataURL, err)
+			logr.Printf("Error reading SP metadata endpoint: %s: %s (will retry)", opts.IDPMetadataURL, err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
