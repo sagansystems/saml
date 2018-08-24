@@ -93,7 +93,12 @@ func (m *Middleware) ServeMetadata(w http.ResponseWriter, r *http.Request) {
 
 func (m *Middleware) GetAssertion(r *http.Request) (*saml.Assertion, error) {
 	r.ParseForm()
-	assertion, err := m.ServiceProvider.ParseResponse(r, m.getPossibleRequestIDs(r))
+
+//  TODO:  restore this after
+//  TODO: https://app.clubhouse.io/gladly/story/18062/cache-saml-request-ids-across-supernovas-so-that-any-supernova-can-validate-inresponseto
+//	TODO: assertion, err := m.ServiceProvider.ParseResponse(r, m.getPossibleRequestIDs(r))
+
+	assertion, err := m.ServiceProvider.ParseResponse(r, make([]string, 0))
 	if err != nil {
 		if parseErr, ok := err.(*saml.InvalidResponseError); ok {
 			m.ServiceProvider.Logger.Printf("RESPONSE: ===\n%s\n===\nNOW: %s\nERROR: %s",
