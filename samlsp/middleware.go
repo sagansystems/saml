@@ -102,7 +102,7 @@ func (m *Middleware) GetAssertion(r *http.Request) (*saml.Assertion, error) {
 	if err != nil {
 		if parseErr, ok := err.(*saml.InvalidResponseError); ok {
 			m.ServiceProvider.Logger.Printf("RESPONSE: ===\n%s\n===\nNOW: %s\nERROR: %s",
-				parseErr.Response, parseErr.Now, parseErr.PrivateErr)
+				parseErr.Response, parseErr.Now, parseErr.PrivateErr.Error())
 		}
 		return nil, err
 	}
