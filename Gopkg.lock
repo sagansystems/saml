@@ -18,7 +18,7 @@
     "testsaml",
     "xmlenc"
   ]
-  revision = "e231b7a1204a93c343c1a5fa2374ca2f6572f715"
+  revision = "d3df7a77410edbc4434e7c26ff5b5f262294855e"
   source = "github.com/sagansystems/saml"
 
 [[projects]]
