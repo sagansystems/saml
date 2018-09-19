@@ -408,18 +408,16 @@ func (sp *ServiceProvider) ParseResponse(req *http.Request, possibleRequestIDs [
 		return nil, retErr
 	}
 
-	requestIDvalid := true
-	//  TODO:  restore this after
-	//  TODO: https://app.clubhouse.io/gladly/story/18062/cache-saml-request-ids-across-supernovas-so-that-any-supernova-can-validate-inresponseto
-	//  TODO: requestIDvalid := false
+	requestIDvalid := false
 	for _, possibleRequestID := range possibleRequestIDs {
 		if resp.InResponseTo == possibleRequestID {
 			requestIDvalid = true
 		}
 	}
 	if !requestIDvalid {
-		retErr.PrivateErr = fmt.Errorf("`InResponseTo` does not match any of the possible request IDs (expected %v)", possibleRequestIDs)
-		return nil, retErr
+		sp.Logger.Printf("InResponseTo [%v] does not match any of the possible request IDs [expected %v]", resp.InResponseTo, possibleRequestIDs)
+		// TODO restore after troubleshooting: retErr.PrivateErr = fmt.Errorf("`InResponseTo` does not match any of the possible request IDs (expected %v)", possibleRequestIDs)
+		// TODO restore after troubleshooting: return nil, retErr
 	}
 
 	if resp.IssueInstant.Add(MaxIssueDelay).Before(now) {
@@ -512,18 +510,18 @@ func (sp *ServiceProvider) validateAssertion(assertion *Assertion, possibleReque
 		return fmt.Errorf("issuer is not %q", sp.IDPMetadata.EntityID)
 	}
 	for _, subjectConfirmation := range assertion.Subject.SubjectConfirmations {
-		//  TODO:  restore this after
-		//  TODO: https://app.clubhouse.io/gladly/story/18062/cache-saml-request-ids-across-supernovas-so-that-any-supernova-can-validate-inresponseto
-		//TODO: requestIDvalid := false
-		//TODO: for _, possibleRequestID := range possibleRequestIDs {
-		//TODO: 	if subjectConfirmation.SubjectConfirmationData.InResponseTo == possibleRequestID {
-		//TODO: 		requestIDvalid = true
-		//TODO: 		break
-		//TODO: 	}
-		//TODO: }
-		//TODO: if !requestIDvalid {
-		//TODO: 	return fmt.Errorf("SubjectConfirmation one of the possible request IDs (%v)", possibleRequestIDs)
-		//TODO: }
+		requestIDvalid := false
+		for _, possibleRequestID := range possibleRequestIDs {
+			if subjectConfirmation.SubjectConfirmationData.InResponseTo == possibleRequestID {
+				requestIDvalid = true
+				break
+			}
+		}
+		if !requestIDvalid {
+			sp.Logger.Printf("SubjectConfirmation InResponseTo [%v] is not one of the possible request IDs [%v]", subjectConfirmation.SubjectConfirmationData.InResponseTo, possibleRequestIDs)
+
+			// TODO restore after troubleshooting: return fmt.Errorf("SubjectConfirmation InResponseTo is not one of the possible request IDs (%v)", possibleRequestIDs)
+		}
 		if subjectConfirmation.SubjectConfirmationData.Recipient != sp.AcsURL.String() {
 			return fmt.Errorf("SubjectConfirmation Recipient is not %s", sp.AcsURL.String())
 		}
