@@ -408,10 +408,7 @@ func (sp *ServiceProvider) ParseResponse(req *http.Request, possibleRequestIDs [
 		return nil, retErr
 	}
 
-	requestIDvalid := true
-	//  TODO:  restore this after
-	//  TODO: https://app.clubhouse.io/gladly/story/18062/cache-saml-request-ids-across-supernovas-so-that-any-supernova-can-validate-inresponseto
-	//  TODO: requestIDvalid := false
+	requestIDvalid := false
 	for _, possibleRequestID := range possibleRequestIDs {
 		if resp.InResponseTo == possibleRequestID {
 			requestIDvalid = true
@@ -512,18 +509,16 @@ func (sp *ServiceProvider) validateAssertion(assertion *Assertion, possibleReque
 		return fmt.Errorf("issuer is not %q", sp.IDPMetadata.EntityID)
 	}
 	for _, subjectConfirmation := range assertion.Subject.SubjectConfirmations {
-		//  TODO:  restore this after
-		//  TODO: https://app.clubhouse.io/gladly/story/18062/cache-saml-request-ids-across-supernovas-so-that-any-supernova-can-validate-inresponseto
-		//TODO: requestIDvalid := false
-		//TODO: for _, possibleRequestID := range possibleRequestIDs {
-		//TODO: 	if subjectConfirmation.SubjectConfirmationData.InResponseTo == possibleRequestID {
-		//TODO: 		requestIDvalid = true
-		//TODO: 		break
-		//TODO: 	}
-		//TODO: }
-		//TODO: if !requestIDvalid {
-		//TODO: 	return fmt.Errorf("SubjectConfirmation one of the possible request IDs (%v)", possibleRequestIDs)
-		//TODO: }
+		requestIDvalid := false
+		for _, possibleRequestID := range possibleRequestIDs {
+			if subjectConfirmation.SubjectConfirmationData.InResponseTo == possibleRequestID {
+				requestIDvalid = true
+				break
+			}
+		}
+		if !requestIDvalid {
+			return fmt.Errorf("SubjectConfirmation one of the possible request IDs (%v)", possibleRequestIDs)
+		}
 		if subjectConfirmation.SubjectConfirmationData.Recipient != sp.AcsURL.String() {
 			return fmt.Errorf("SubjectConfirmation Recipient is not %s", sp.AcsURL.String())
 		}
