@@ -35,6 +35,7 @@ type Options struct {
 	ForceAuthn        bool
 	MetadataPath      string
 	ACSPath           string
+	Compatibility     saml.IdpCompatibility
 }
 
 // New creates a new Middleware
@@ -65,13 +66,14 @@ func New(opts Options) (*Middleware, error) {
 
 	m := &Middleware{
 		ServiceProvider: saml.ServiceProvider{
-			Key:         opts.Key,
-			Logger:      logr,
-			Certificate: opts.Certificate,
-			MetadataURL: metadataURL,
-			AcsURL:      acsURL,
-			IDPMetadata: opts.IDPMetadata,
-			ForceAuthn:  &opts.ForceAuthn,
+			Key:           opts.Key,
+			Logger:        logr,
+			Certificate:   opts.Certificate,
+			MetadataURL:   metadataURL,
+			AcsURL:        acsURL,
+			IDPMetadata:   opts.IDPMetadata,
+			ForceAuthn:    &opts.ForceAuthn,
+			Compatibility: opts.Compatibility,
 		},
 		AllowIDPInitiated: opts.AllowIDPInitiated,
 		TokenMaxAge:       tokenMaxAge,

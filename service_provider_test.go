@@ -5,12 +5,13 @@ import (
 	"encoding/xml"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/crewjam/saml/testsaml"
-		"github.com/russellhaering/goxmldsig"
+	"github.com/russellhaering/goxmldsig"
 
 	"crypto/rsa"
 
@@ -640,6 +641,28 @@ func (test *ServiceProviderTest) TestCanParseResponse(c *C) {
 		},
 	})
 }
+
+func (test *ServiceProviderTest) TestEmptyDestinationAllowed(c *C) {
+	s := ServiceProvider{
+		Key:           test.Key,
+		Certificate:   test.Certificate,
+		MetadataURL:   mustParseURL("https://15661444.ngrok.io/saml2/metadata"),
+		AcsURL:        mustParseURL("https://15661444.ngrok.io/saml2/acs"),
+		IDPMetadata:   &EntityDescriptor{},
+		Compatibility: IdpCompatibility{AllowEmptyDestination: true},
+	}
+	err := xml.Unmarshal([]byte(test.IDPMetadata), &s.IDPMetadata)
+	c.Assert(err, IsNil)
+
+	samlResponse := destinationRegExp.ReplaceAllString(test.SamlResponse, "")
+
+	req := http.Request{PostForm: url.Values{}}
+	req.PostForm.Set("SAMLResponse", base64.StdEncoding.EncodeToString([]byte(samlResponse)))
+	_, err = s.ParseResponse(&req, []string{"id-9e61753d64e928af5a7a341a97f420c9"})
+	c.Assert(err, IsNil)
+}
+
+var destinationRegExp = regexp.MustCompile(`Destination=\S+ `)
 
 func (test *ServiceProviderTest) TestInvalidResponses(c *C) {
 	s := ServiceProvider{
