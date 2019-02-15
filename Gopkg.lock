@@ -8,7 +8,6 @@
   version = "v1.0.1"
 
 [[projects]]
-  branch = "master"
   name = "github.com/crewjam/saml"
   packages = [
     ".",
@@ -18,8 +17,8 @@
     "testsaml",
     "xmlenc"
   ]
-  revision = "d3df7a77410edbc4434e7c26ff5b5f262294855e"
-  source = "github.com/sagansystems/saml"
+  revision = "6b5dd2d26974f7f5e59132ef5921fab7993794d7"
+  version = "0.2.0"
 
 [[projects]]
   branch = "master"
@@ -83,7 +82,7 @@
     "blowfish",
     "ripemd160"
   ]
-  revision = "de0752318171da717af4ce24d0a2e8626afaeb11"
+  revision = "c126467f60eb25f8f27e5a981f32a87e3965053f"
 
 [[projects]]
   branch = "v1"
@@ -94,6 +93,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "1d4f500eeba60cf5146c7658eef3d51acb96626ead9e182f193706c0e7e34ebb"
+  inputs-digest = "e95ae53367b806651c34d425c22f40bade70c9db018c9b619b37f4c8405acb65"
   solver-name = "gps-cdcl"
   solver-version = 1
