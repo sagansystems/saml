@@ -81,6 +81,9 @@ type ServiceProvider struct {
 	// ForceAuthn allows you to force re-authentication of users even if the user
 	// has a SSO session at the IdP.
 	ForceAuthn *bool
+
+	// Compatibility allows you to support not fully SAML-compliant IdPs
+	Compatibility IdpCompatibility
 }
 
 // MaxIssueDelay is the longest allowed time between when a SAML assertion is
@@ -403,7 +406,7 @@ func (sp *ServiceProvider) ParseResponse(req *http.Request, possibleRequestIDs [
 		retErr.PrivateErr = fmt.Errorf("cannot unmarshal response: %s", err)
 		return nil, retErr
 	}
-	if resp.Destination != sp.AcsURL.String() {
+	if !(resp.Destination == "" && sp.Compatibility.AllowEmptyDestination) && resp.Destination != sp.AcsURL.String() {
 		retErr.PrivateErr = fmt.Errorf("`Destination` does not match AcsURL (expected %q)", sp.AcsURL.String())
 		return nil, retErr
 	}
@@ -677,4 +680,9 @@ func (sp *ServiceProvider) validateSignature(el *etree.Element) error {
 
 	_, err = validationContext.Validate(el)
 	return err
+}
+
+type IdpCompatibility struct {
+	// AllowEmptyDestination allows for empty `Destiniation` field in the assertion
+	AllowEmptyDestination bool
 }
