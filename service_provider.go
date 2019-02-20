@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/beevik/etree"
@@ -406,7 +407,7 @@ func (sp *ServiceProvider) ParseResponse(req *http.Request, possibleRequestIDs [
 		retErr.PrivateErr = fmt.Errorf("cannot unmarshal response: %s", err)
 		return nil, retErr
 	}
-	if !(resp.Destination == "" && sp.Compatibility.AllowEmptyDestination) && resp.Destination != sp.AcsURL.String() {
+	if resp.Destination != sp.AcsURL.String() && !(sp.Compatibility.AllowPartialDestination && strings.HasPrefix(sp.AcsURL.String(), resp.Destination)) {
 		retErr.PrivateErr = fmt.Errorf("`Destination` does not match AcsURL (expected %q)", sp.AcsURL.String())
 		return nil, retErr
 	}
@@ -683,6 +684,6 @@ func (sp *ServiceProvider) validateSignature(el *etree.Element) error {
 }
 
 type IdpCompatibility struct {
-	// AllowEmptyDestination allows for empty `Destiniation` field in the assertion
-	AllowEmptyDestination bool
+	// AllowPartialDestination allows for partial or empty `Destination` attribute in SAML response
+	AllowPartialDestination bool
 }
