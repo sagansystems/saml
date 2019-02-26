@@ -419,9 +419,8 @@ func (sp *ServiceProvider) ParseResponse(req *http.Request, possibleRequestIDs [
 		}
 	}
 	if !requestIDvalid {
-		sp.Logger.Printf("InResponseTo [%v] does not match any of the possible request IDs [expected %v]", resp.InResponseTo, possibleRequestIDs)
-		// TODO restore after troubleshooting: retErr.PrivateErr = fmt.Errorf("`InResponseTo` does not match any of the possible request IDs (expected %v)", possibleRequestIDs)
-		// TODO restore after troubleshooting: return nil, retErr
+		retErr.PrivateErr = fmt.Errorf("`InResponseTo` does not match any of the possible request IDs (expected %v)", possibleRequestIDs)
+		return nil, retErr
 	}
 
 	if resp.IssueInstant.Add(MaxIssueDelay).Before(now) {
@@ -532,9 +531,7 @@ func (sp *ServiceProvider) validateAssertion(assertion *Assertion, possibleReque
 			}
 		}
 		if !requestIDvalid {
-			sp.Logger.Printf("SubjectConfirmation InResponseTo [%v] is not one of the possible request IDs [%v]", subjectConfirmation.SubjectConfirmationData.InResponseTo, possibleRequestIDs)
-
-			// TODO restore after troubleshooting: return fmt.Errorf("SubjectConfirmation InResponseTo is not one of the possible request IDs (%v)", possibleRequestIDs)
+			return fmt.Errorf("SubjectConfirmation one of the possible request IDs (%v)", possibleRequestIDs)
 		}
 		if subjectConfirmation.SubjectConfirmationData.Recipient != sp.AcsURL.String() {
 			return fmt.Errorf("SubjectConfirmation Recipient is not %s", sp.AcsURL.String())

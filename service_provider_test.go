@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/crewjam/saml/testsaml"
+	"github.com/kr/pretty"
 	"github.com/russellhaering/goxmldsig"
 
 	"crypto/rsa"
@@ -697,10 +698,9 @@ func (test *ServiceProviderTest) TestInvalidResponses(c *C) {
 	c.Assert(err.(*InvalidResponseError).PrivateErr.Error(), Equals, "`Destination` does not match AcsURL (expected \"https://wrong/saml2/acs\")")
 	s.AcsURL = mustParseURL("https://15661444.ngrok.io/saml2/acs")
 
-	// TODO: restore after troubleshooting
-	//req.PostForm.Set("SAMLResponse", base64.StdEncoding.EncodeToString([]byte(test.SamlResponse)))
-	//_, err = s.ParseResponse(&req, []string{"wrongRequestID"})
-	//c.Assert(err.(*InvalidResponseError).PrivateErr.Error(), Equals, "`InResponseTo` does not match any of the possible request IDs (expected [wrongRequestID])")
+	req.PostForm.Set("SAMLResponse", base64.StdEncoding.EncodeToString([]byte(test.SamlResponse)))
+	_, err = s.ParseResponse(&req, []string{"wrongRequestID"})
+	c.Assert(err.(*InvalidResponseError).PrivateErr.Error(), Equals, "`InResponseTo` does not match any of the possible request IDs (expected [wrongRequestID])")
 
 	TimeNow = func() time.Time {
 		rv, _ := time.Parse("Mon Jan 2 15:04:05 MST 2006", "Mon Nov 30 20:57:09 UTC 2016")
@@ -782,10 +782,9 @@ func (test *ServiceProviderTest) TestInvalidAssertions(c *C) {
 	assertion = Assertion{}
 	xml.Unmarshal(assertionBuf, &assertion)
 
-	// TODO: restore after troubleshooting
-	//pretty.Print(assertion.Subject.SubjectConfirmations)
-	//err = s.validateAssertion(&assertion, []string{"any request id"}, TimeNow())
-	//c.Assert(err, ErrorMatches, "SubjectConfirmation one of the possible request IDs .*")
+	pretty.Print(assertion.Subject.SubjectConfirmations)
+	err = s.validateAssertion(&assertion, []string{"any request id"}, TimeNow())
+	c.Assert(err, ErrorMatches, "SubjectConfirmation one of the possible request IDs .*")
 
 	assertion.Subject.SubjectConfirmations[0].SubjectConfirmationData.Recipient = "wrong/acs/url"
 	err = s.validateAssertion(&assertion, []string{"id-9e61753d64e928af5a7a341a97f420c9"}, TimeNow())
